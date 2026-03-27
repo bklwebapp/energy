@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบรายงานมาตรการประหยัดพลังงาน กทม.</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SweetAlert2 สำหรับ Popup -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
+        .tab-active { border-bottom: 4px solid #10b981; color: #10b981; font-weight: bold; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- ================= LOGIN SCREEN (Modal) ================= -->
+    <div id="login-screen" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm">
+        <div class="glass-panel p-10 rounded-2xl shadow-2xl w-full max-w-md mx-4 relative">
+            <button onclick="hideLoginScreen()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-700 transition-colors">
+                <i class="fa-solid fa-times text-xl"></i>
+            </button>
+            <div class="text-center mb-8">
+                <div class="bg-emerald-100 text-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">
+                    <i class="fa-solid fa-leaf"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">ระบบรายงานประหยัดพลังงาน</h2>
+                <p class="text-gray-500 text-sm mt-1">เข้าสู่ระบบสำหรับเจ้าหน้าที่</p>
+            </div>
+            
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้ใช้งาน</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-user text-gray-400"></i>
+                        </div>
+                        <input type="text" id="username" class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" placeholder="ระบุ username..." required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-lock text-gray-400"></i>
+                        </div>
+                        <input type="password" id="password" class="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500" placeholder="••••••••" required>
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-lg shadow transition-colors mt-2">
+                    เข้าสู่ระบบ
+                </button>
+            </form>
+            <div class="mt-6 text-xs text-gray-500 bg-gray-50 p-3 rounded text-center border border-gray-100">
+                <b>ข้อมูลผู้ใช้งาน ดึงจาก Google Sheets (Sheet: Users)</b>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MAIN APP ================= -->
+    <div id="app-container" class="flex flex-col h-full">
+        <header class="bg-emerald-700 text-white shadow-lg z-10 flex-shrink-0">
+            <div class="container mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-leaf text-2xl text-emerald-300"></i>
+                    <h1 class="text-xl font-bold">BMA Energy Dashboard</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-sm bg-emerald-800 px-4 py-2 rounded-full shadow-inner flex items-center">
+                        <i class="fa-solid fa-user-circle mr-2"></i> 
+                        <span id="current-user-display" class="font-medium">บุคคลทั่วไป (สาธารณะ)</span>
+                    </div>
+                    <button id="auth-btn" onclick="showLoginScreen()" class="text-emerald-100 hover:text-white transition-colors flex items-center gap-1 font-medium bg-emerald-600/50 px-3 py-1.5 rounded-lg border border-emerald-500/30">
+                        <i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="bg-white shadow-sm z-10 flex-shrink-0 overflow-x-auto no-scrollbar">
+            <div class="container mx-auto px-6 flex gap-6 min-w-max">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="py-4 px-2 tab-active transition-colors hover:text-emerald-600 whitespace-nowrap">
+                    <i class="fa-solid fa-chart-pie mr-2"></i> แดชบอร์ดสรุปผล
+                </button>
+                <button onclick="switchTab('report')" id="tab-report" class="py-4 px-2 text-gray-500 transition-colors hover:text-emerald-600 whitespace-nowrap">
+                    <i class="fa-solid fa-list-check mr-2"></i> รายงานความก้าวหน้า
+                </button>
+                <button onclick="switchTab('admin')" id="tab-admin" class="py-4 px-2 text-gray-500 transition-colors hover:text-emerald-600 hidden whitespace-nowrap">
+                    <i class="fa-solid fa-sliders mr-2"></i> ระบบหลังบ้าน (Admin)
+                </button>
+            </div>
+        </div>
+
+        <main class="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-100">
+            <div class="container mx-auto">
+                <!-- DASHBOARD VIEW -->
+                <div id="view-dashboard" class="space-y-6 block">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div class="glass-panel rounded-xl shadow-sm p-6 border border-gray-100 border-l-4 border-l-blue-500">
+                            <div class="text-gray-500 text-sm mb-1">มาตรการทั้งหมด (หลัก)</div>
+                            <div class="text-3xl font-bold text-gray-700" id="stat-total">0</div>
+                        </div>
+                        <div class="glass-panel rounded-xl shadow-sm p-6 border border-gray-100 border-l-4 border-l-emerald-500">
+                            <div class="text-gray-500 text-sm mb-1">ดำเนินการแล้วเสร็จ (100%)</div>
+                            <div class="text-3xl font-bold text-emerald-600" id="stat-completed">0</div>
+                        </div>
+                        <div class="glass-panel rounded-xl shadow-sm p-6 border border-gray-100 border-l-4 border-l-yellow-500">
+                            <div class="text-gray-500 text-sm mb-1">อยู่ระหว่างดำเนินการ</div>
+                            <div class="text-3xl font-bold text-yellow-600" id="stat-progress">0</div>
+                        </div>
+                        <div class="glass-panel rounded-xl shadow-sm p-6 border border-gray-100 border-l-4 border-l-red-500">
+                            <div class="text-gray-500 text-sm mb-1">ยังไม่เริ่มดำเนินการ</div>
+                            <div class="text-3xl font-bold text-red-600" id="stat-pending">0</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="glass-panel rounded-xl shadow-sm p-6 border border-gray-100">
+                            <h3 class="text-lg font-bold mb-4 text-gray-700">ภาพรวมความก้าวหน้าตามหมวดหมู่</h3>
+                            <div class="relative h-64"><canvas id="categoryChart"></canvas></div>
+                        </div>
+                        <div class="glass-panel rounded-xl shadow-sm p-6 border border-gray-100">
+                            <h3 class="text-lg font-bold mb-4 text-gray-700">สถานะการรายงาน</h3>
+                            <div class="relative h-64 flex justify-center"><canvas id="statusChart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REPORT DATA VIEW -->
+                <div id="view-report" class="space-y-6 hidden">
+                    <div class="glass-panel rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-700">บันทึกรายงานผลมาตรการ</h2>
+                                <p class="text-sm text-gray-500" id="report-subtitle">กำลังโหลดข้อมูล...</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <span class="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full"><i class="fa-solid fa-cloud-arrow-up"></i> DB Sync</span>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm whitespace-nowrap">
+                                <thead class="bg-gray-100 text-gray-600">
+                                    <tr>
+                                        <th class="p-4 font-semibold w-16 text-center">ลำดับ</th>
+                                        <th class="p-4 font-semibold w-24 text-center">รหัส</th>
+                                        <th class="p-4 font-semibold">มาตรการ</th>
+                                        <th class="p-4 font-semibold text-center w-32">% ผลงานที่ทำได้</th>
+                                        <th class="p-4 font-semibold">ฝ่ายที่รับผิดชอบ</th>
+                                        <th class="p-4 font-semibold text-center w-28">จัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ADMIN SETTINGS VIEW -->
+                <div id="view-admin" class="space-y-6 hidden">
+                    
+                    <!-- ส่วนที่ 1: ตั้งค่าผู้รับผิดชอบ -->
+                    <div class="glass-panel rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                        <div class="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50">
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-700"><i class="fa-solid fa-users-gear mr-2 text-emerald-600"></i>ตั้งค่าระบบ (Admin)</h2>
+                                <p class="text-sm text-gray-500">กำหนดผู้รับผิดชอบ และจัดการผู้ใช้งาน</p>
+                            </div>
+                            <button onclick="saveAdminSettings()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-colors w-full md:w-auto">
+                                <i class="fa-solid fa-save mr-1"></i> บันทึกการตั้งค่า
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto max-h-[500px] relative">
+                            <table class="w-full text-left text-sm border-collapse">
+                                <thead class="bg-gray-100 text-gray-600 sticky top-0 z-10 shadow-sm">
+                                    <tr id="admin-table-head"></tr>
+                                </thead>
+                                <tbody id="admin-table-body" class="divide-y divide-gray-200"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ส่วนที่ 2: จัดการผู้ใช้งานระบบ -->
+                    <div class="glass-panel rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div class="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50">
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-700"><i class="fa-solid fa-user-shield mr-2 text-blue-600"></i>จัดการผู้ใช้งาน</h2>
+                                <p class="text-sm text-gray-500">เพิ่ม, แก้ไขผู้ใช้งาน และตรวจสอบประวัติระบบ</p>
+                            </div>
+                            <div class="flex gap-2 w-full md:w-auto">
+                                <button onclick="showActivityLogs()" class="flex-1 md:flex-none bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-colors">
+                                    <i class="fa-solid fa-history mr-1"></i> ประวัติระบบ
+                                </button>
+                                <button onclick="openAddUserForm()" class="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-colors">
+                                    <i class="fa-solid fa-user-plus mr-1"></i> เพิ่มผู้ใช้
+                                </button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto max-h-[400px]">
+                            <table class="w-full text-left text-sm whitespace-nowrap">
+                                <thead class="bg-gray-100 text-gray-600 sticky top-0">
+                                    <tr>
+                                        <th class="p-4 font-semibold">Username</th>
+                                        <th class="p-4 font-semibold">ชื่อ-สกุล / ชื่อแสดงผล</th>
+                                        <th class="p-4 font-semibold">สิทธิ์ (Role)</th>
+                                        <th class="p-4 font-semibold">สังกัดฝ่าย</th>
+                                        <th class="p-4 font-semibold text-center">จัดการ</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ===== SCRIPT SECTION ===== -->
+    <script>
+        // -------------------------------------------------------------
+        // !!! ใส่ URL ของ Google Apps Script (Web App) ตรงนี้ !!!
+        // -------------------------------------------------------------
+        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzXqWRdVUXNNinRCa3DscsNikgEmeIVkys5i35PMwbnEF_ykEsH244l8ae6pkhc_nQF/exec"; 
+
+        const DEPARTMENTS = [
+            { id: "dept1", name: "ฝ่ายปกครอง" }, { id: "dept2", name: "ฝ่ายทะเบียน" },
+            { id: "dept3", name: "ฝ่ายโยธา" }, { id: "dept4", name: "ฝ่ายสิ่งแวดล้อมฯ" },
+            { id: "dept5", name: "ฝ่ายรายได้" }, { id: "dept6", name: "ฝ่ายเทศกิจ" },
+            { id: "dept7", name: "ฝ่ายการศึกษา" }, { id: "dept8", name: "ฝ่ายการคลัง" },
+            { id: "dept9", name: "ฝ่ายรักษาความสะอาดฯ" }, { id: "dept10", name: "ฝ่ายพัฒนาชุมชนฯ" }
+        ];
+
+        const masterData = [
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.1", id: "1.1.1", title: "ราชการ-รัฐวิสาหกิจ WFH ทันที", goal: "≥ร้อยละ 20 ใช้รถสาธารณะ/car pool" },
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.1", id: "1.1.2", title: "ราชการ-รัฐวิสาหกิจ WFH ทันที", goal: "≥ร้อยละ 2 ร่วม WFH" },
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.2", id: "1.2.1", title: "งดเดินทางต่างประเทศ", goal: "งดเดินทางต่างประเทศ" },
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.3", id: "1.3.1", title: "ประชุมออนไลน์", goal: "≥ร้อยละ 80 ผ่าน Online หรือ Hybrid" },
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.4", id: "1.4.1", title: "เปิดแอร์ 26-27 องศา", goal: "ร้อยละ 100 ของหน่วยงาน" },
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.5", id: "1.5.1", title: "งดใส่สูทผูกเนกไท", goal: "ร้อยละ 100 ของหน่วยงาน" },
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.6", id: "1.6.1", title: "ปิดไฟและอุปกรณ์ที่ไม่จำเป็น", goal: "ร้อยละ 100 ของหน่วยงาน มีมาตรการและปฏิบัติอย่างเป็นระบบ" },
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.7", id: "1.7.1", title: "ลดใช้ลิฟต์ ลดใช้กระดาษ", goal: "ร้อยละ 100 ของดำเนินการด้านลิฟต์" },
+            { category: "นโยบายรัฐบาล (เร่งด่วน)", seq: "1.7", id: "1.7.2", title: "ลดใช้ลิฟต์ ลดใช้กระดาษ", goal: "ลดใช้กระดาษ ≥ร้อยละ 30" },
+            { category: "นโยบายรัฐบาล (ประหยัดพลังงาน)", seq: "1.8", id: "1.8.1", title: "ตรวจสภาพรถสม่ำเสมอ", goal: "ร้อยละ 100 ของรถยนต์ส่วนกลาง" },
+            { category: "นโยบายรัฐบาล (ประหยัดพลังงาน)", seq: "1.9", id: "1.9.1", title: "ขับรถความเร็วเหมาะสม", goal: "ไม่เกิน 80 กม./ชม." },
+            { category: "นโยบายรัฐบาล (ประหยัดพลังงาน)", seq: "1.10", id: "1.10.1", title: "ใช้รถร่วมกัน (Car Pool)", goal: "ดูแลรถยนต์ราชการ" },
+            { category: "นโยบายรัฐบาล (ประหยัดพลังงาน)", seq: "1.11", id: "1.11.1", title: "วางแผนการเดินทาง", goal: "ดูแลรถยนต์ราชการ" },
+            { category: "ข้อสั่งการ มท.", seq: "2.1", id: "2.1.1", title: "ติดตามสถานการณ์พลังงาน", goal: "ตรวจสอบปั๊ม 100%" },
+            { category: "ข้อสั่งการ มท.", seq: "2.2", id: "2.2.1", title: "เฝ้าระวังจำหน่ายน้ำมัน", goal: "รายงานเมื่อพบผิดปกติ" },
+            { category: "ข้อสั่งการ มท.", seq: "2.3", id: "2.3.1", title: "สื่อสารประหยัดพลังงาน", goal: "ปชส. ≥ 2 ช่องทาง" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.1", id: "3.1.1", title: "ลดการใช้เชื้อเพลิงรถยนต์ส่วนกลาง", goal: "ลดลง ≥ 20%" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.2", id: "3.2.1", title: "ตรวจสอบสถานบริการน้ำมัน", goal: "ตรวจสอบรายวัน" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.3", id: "3.3.1", title: "สอบถามผู้รับจ้าง กทม.", goal: "100% ของโครงการ" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.4", id: "3.4.1", title: "รายงานปริมาณน้ำมัน", goal: "รายงานประจำวัน" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.5", id: "3.5.1", title: "พิจารณาจุดจราจรติดขัด", goal: "ติดตามสถานการณ์" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.6", id: "3.6.1", title: "ลดการใช้พลังงานในอาคาร", goal: "รายงานทุกเดือน" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.7", id: "3.7.1", title: "สื่อสารให้ประชาชนเข้าใจ", goal: "ปชส. ≥ 2 ช่องทาง" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.8", id: "3.8.1", title: "ตรวจสอบไฟฟ้าแสงสว่าง", goal: "ปิดโคมไฟตามเวลา" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.10", id: "3.10.1", title: "รณรงค์คัดแยกขยะ", goal: "เผยแพร่สื่อตามเวลา" },
+            { category: "ข้อสั่งการ ผู้ว่าฯ กทม.", seq: "3.11", id: "3.11.1", title: "จัดทำแผนมาตรการ", goal: "1 แผน" }
+        ];
+
+        let currentUser = null;
+        let progressData = {};
+        let measureAssignments = {};
+        let dbUsers = {}; 
+        let activityLogs = []; 
+
+        let categoryChartInst = null;
+        let statusChartInst = null;
+
+        window.onload = async () => {
+            await fetchDataFromGAS();
+            updateAuthUI();
+            switchTab('dashboard');
+        };
+
+        async function fetchDataFromGAS() {
+            Swal.fire({
+                title: 'กำลังโหลดข้อมูล...',
+                html: 'โปรดรอสักครู่',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+
+            try {
+                const response = await fetch(GAS_API_URL);
+                const data = await response.json();
+                
+                if(data.status === 'success') {
+                    progressData = data.progressData || {};
+                    dbUsers = data.users || {}; 
+                    activityLogs = data.logs || [];
+                    
+                    if(Object.keys(data.assignments || {}).length === 0) {
+                        measureAssignments = generateDefaultAssignments();
+                    } else {
+                        measureAssignments = data.assignments;
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                Swal.fire({ icon: 'warning', title: 'การเชื่อมต่อมีปัญหา', text: 'ระบบกำลังแสดงผลข้อมูลจำลองเบื้องต้น'});
+                measureAssignments = generateDefaultAssignments();
+            }
+
+            Swal.close();
+            renderTable();
+            updateDashboard();
+        }
+
+        function logLocalActivity(action, details) {
+            if (!currentUser) return;
+            activityLogs.unshift({
+                timestamp: new Date().toISOString(),
+                username: currentUser.name,
+                action: action,
+                details: details
+            });
+        }
+
+        function generateDefaultAssignments() {
+            const defaultMapping = {};
+            const allDeptIds = DEPARTMENTS.map(d => d.id);
+            masterData.forEach(m => {
+                if(m.seq.startsWith("1.")) defaultMapping[m.id] = [...allDeptIds];
+                else if(["2.1", "2.2", "3.2"].includes(m.seq)) defaultMapping[m.id] = ["dept6"]; 
+                else if(["2.3", "3.1", "3.6", "3.11"].includes(m.seq)) defaultMapping[m.id] = ["dept1"]; 
+                else if(["3.3", "3.5", "3.8"].includes(m.seq)) defaultMapping[m.id] = ["dept3"]; 
+                else if(["3.4"].includes(m.seq)) defaultMapping[m.id] = ["dept8"]; 
+                else if(["3.10"].includes(m.seq)) defaultMapping[m.id] = ["dept9", "dept10"]; 
+                else defaultMapping[m.id] = [...allDeptIds]; 
+            });
+            return defaultMapping;
+        }
+
+        function isAssigned(measureId, deptId) {
+            if(!measureAssignments[measureId]) return false;
+            return measureAssignments[measureId].includes(deptId);
+        }
+
+        function getAssignedDeptNames(measureId) {
+            const ids = measureAssignments[measureId] || [];
+            if(ids.length === DEPARTMENTS.length) return `<span class="text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs">รับผิดชอบทุกฝ่าย</span>`;
+            if(ids.length === 0) return `<span class="text-red-500 text-xs">ยังไม่ระบุ</span>`;
+            return ids.map(id => {
+                const dept = DEPARTMENTS.find(d => d.id === id);
+                return dept ? `<span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs inline-block m-0.5">${dept.name.replace('ฝ่าย', '')}</span>` : '';
+            }).join(' ');
+        }
+
+        function showLoginScreen() { document.getElementById('login-screen').classList.remove('hidden'); }
+        function hideLoginScreen() { document.getElementById('login-screen').classList.add('hidden'); document.getElementById('login-form').reset(); }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('username').value.trim();
+            const p = document.getElementById('password').value.trim();
+
+            if (dbUsers[u] && dbUsers[u].password === p) {
+                currentUser = dbUsers[u];
+                
+                hideLoginScreen();
+                updateAuthUI();
+                
+                logLocalActivity('เข้าสู่ระบบ', '');
+                fetch(GAS_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'logActivity', username: currentUser.name, activity: 'เข้าสู่ระบบ', details: '' })
+                });
+                
+                Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', text: `ยินดีต้อนรับ ${currentUser.name}`, timer: 1500, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบล้มเหลว', text: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            updateAuthUI();
+            switchTab('dashboard'); 
+            Swal.fire({ icon: 'info', title: 'ออกจากระบบเรียบร้อย', timer: 1500, showConfirmButton: false });
+        }
+
+        function updateAuthUI() {
+            const userDisplay = document.getElementById('current-user-display');
+            const authBtn = document.getElementById('auth-btn');
+            const adminTab = document.getElementById('tab-admin');
+            const reportSubtitle = document.getElementById('report-subtitle');
+
+            if (currentUser) {
+                userDisplay.innerHTML = currentUser.role === 'admin' 
+                    ? `<i class="fa-solid fa-crown text-yellow-300 mr-2"></i> ${currentUser.name}`
+                    : currentUser.name;
+                
+                authBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> ออกจากระบบ';
+                authBtn.onclick = handleLogout;
+                authBtn.className = "text-red-200 hover:text-white transition-colors flex items-center gap-1 font-medium bg-red-600/50 px-3 py-1.5 rounded-lg border border-red-500/30";
+
+                if (currentUser.role === 'admin') {
+                    adminTab.classList.remove('hidden');
+                    reportSubtitle.innerText = "แอดมินสามารถดูและแก้ไขข้อมูลได้ทุกหัวข้อ";
+                    renderAdminTable();
+                    renderUsersTable(); 
+                } else {
+                    adminTab.classList.add('hidden');
+                    reportSubtitle.innerText = `กำลังแสดงข้อมูลเฉพาะที่ ${currentUser.name} รับผิดชอบ`;
+                }
+            } else {
+                userDisplay.innerHTML = "บุคคลทั่วไป (สาธารณะ)";
+                authBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ';
+                authBtn.onclick = showLoginScreen;
+                authBtn.className = "text-emerald-100 hover:text-white transition-colors flex items-center gap-1 font-medium bg-emerald-600/50 px-3 py-1.5 rounded-lg border border-emerald-500/30";
+                
+                adminTab.classList.add('hidden');
+                reportSubtitle.innerText = "ดูความก้าวหน้าภาพรวม (สำหรับเจ้าหน้าที่โปรดเข้าสู่ระบบเพื่ออัปเดต)";
+            }
+            renderTable();
+        }
+
+        function switchTab(tabId) {
+            ['dashboard', 'report', 'admin'].forEach(id => {
+                const view = document.getElementById(`view-${id}`);
+                const tab = document.getElementById(`tab-${id}`);
+                if(view) view.classList.add('hidden');
+                if(tab) tab.classList.remove('tab-active', 'text-gray-500');
+            });
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+            const activeTab = document.getElementById(`tab-${tabId}`);
+            activeTab.classList.add('tab-active');
+            
+            ['dashboard', 'report', 'admin'].forEach(id => {
+                if(id !== tabId && document.getElementById(`tab-${id}`)) {
+                    document.getElementById(`tab-${id}`).classList.add('text-gray-500');
+                }
+            });
+            if(tabId === 'dashboard') updateDashboard();
+        }
+
+        function formatThaiDateTime(dateVal) {
+            if (!dateVal) return '';
+            if (typeof dateVal === 'string' && dateVal.startsWith('วันที่')) return dateVal;
+            let date;
+            if (typeof dateVal === 'string' && dateVal.includes('/')) {
+                const parts = dateVal.split(/[\s,]+/); 
+                const dateStr = parts.find(p => p.includes('/'));
+                const timeStr = parts.find(p => p.includes(':'));
+                if (dateStr && timeStr) {
+                    const dParts = dateStr.split('/');
+                    const tParts = timeStr.split(':');
+                    if (dParts.length === 3 && tParts.length >= 2) {
+                        let year = parseInt(dParts[2]);
+                        if (year > 2500) year -= 543; 
+                        date = new Date(year, parseInt(dParts[1]) - 1, parseInt(dParts[0]), tParts[0], tParts[1]);
+                    }
+                }
+            }
+            if (!date || isNaN(date.getTime())) date = new Date(dateVal);
+            if (isNaN(date.getTime())) return dateVal;
+
+            const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+            return `วันที่ ${date.getDate()} ${thaiMonths[date.getMonth()]} ${date.getFullYear() + 543} เวลา ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')} น.`;
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            let currentCat = '';
+
+            masterData.forEach((item) => {
+                let canEdit = false;
+                let showRow = true;
+
+                if (currentUser) {
+                    if (currentUser.role === 'admin') canEdit = true;
+                    else {
+                        canEdit = isAssigned(item.id, currentUser.deptId);
+                        if (!canEdit) showRow = false; 
+                    }
+                } else {
+                    canEdit = false;
+                    showRow = true; 
+                }
+
+                if (!showRow) return;
+
+                const prog = progressData[item.id] || { progress: 0, result: '', remark: '', timestamp: '' };
+                const pct = prog.progress;
+                
+                // สีสำหรับกราฟ Gauge
+                let colorHex = '#ef4444'; // แดง (0%)
+                if(pct === 100) colorHex = '#10b981'; // เขียว (100%)
+                else if(pct > 0) colorHex = '#f59e0b'; // ส้มเหลือง (1-99%)
+
+                if(item.category !== currentCat) {
+                    tbody.innerHTML += `<tr class="bg-emerald-50"><td colspan="6" class="p-3 font-bold text-emerald-800"><i class="fa-solid fa-folder-open mr-2"></i> ${item.category}</td></tr>`;
+                    currentCat = item.category;
+                }
+
+                // สร้าง Gauge Chart ด้วย SVG
+                const gaugeHTML = `
+                    <div class="flex flex-col items-center justify-center">
+                        <svg viewBox="0 0 100 60" class="w-24 h-14 block drop-shadow-sm">
+                            <!-- Background Arc -->
+                            <path d="M 15 50 A 35 35 0 0 1 85 50" fill="none" stroke="#e5e7eb" stroke-width="8" stroke-linecap="round" />
+                            <!-- Foreground Arc -->
+                            <path d="M 15 50 A 35 35 0 0 1 85 50" fill="none" stroke="${colorHex}" stroke-width="8" stroke-linecap="round"
+                                  stroke-dasharray="110" stroke-dashoffset="${110 - (110 * pct / 100)}" />
+                            <!-- Needle -->
+                            <g transform="rotate(${pct * 1.8 - 90}, 50, 50)">
+                                <polygon points="48,50 50,22 52,50" fill="#4b5563" />
+                                <circle cx="50" cy="50" r="4" fill="#4b5563" />
+                            </g>
+                        </svg>
+                        <span class="text-xs font-bold text-gray-700 mt-1">${pct}%</span>
+                    </div>
+                `;
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="p-4 font-medium text-gray-900 border-l-4 text-center ${pct == 100 ? 'border-emerald-500' : (pct > 0 ? 'border-yellow-400' : 'border-red-500')}">${item.seq}</td>
+                    <td class="p-4 font-medium text-emerald-700 text-center bg-gray-50/50">${item.id}</td>
+                    <td class="p-4 whitespace-normal min-w-[200px]">
+                        <div class="font-semibold text-gray-800">${item.title}</div>
+                        <div class="text-xs text-gray-500">เป้าหมาย: ${item.goal}</div>
+                        ${prog.result ? `<div class="text-xs text-emerald-600 mt-1 font-medium"><i class="fa-solid fa-bullseye"></i> ผลงาน: ${prog.result}</div>` : ''}
+                        ${prog.remark ? `<div class="text-xs text-blue-600 mt-0.5"><i class="fa-solid fa-comment-dots"></i> ปัญหา/อุปสรรค: ${prog.remark}</div>` : ''}
+                        ${prog.timestamp ? `<div class="text-[11px] text-gray-400 mt-0.5"><i class="fa-regular fa-clock"></i> ${formatThaiDateTime(prog.timestamp)}</div>` : ''}
+                    </td>
+                    <td class="p-4 text-center">
+                        ${gaugeHTML}
+                    </td>
+                    <td class="p-4 whitespace-normal max-w-[200px] leading-tight">
+                        ${getAssignedDeptNames(item.id)}
+                    </td>
+                    <td class="p-4 text-center">
+                        ${canEdit ? `
+                            <button onclick="openForm('${item.id}')" class="bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white px-3 py-1.5 rounded-md transition-colors text-sm font-medium shadow-sm">
+                                <i class="fa-solid fa-pen-to-square"></i> อัปเดต
+                            </button>
+                        ` : `
+                            <span class="text-gray-400 text-sm" title="ไม่มีสิทธิ์แก้ไข หรือ กรุณาล็อกอิน"><i class="fa-solid fa-lock"></i></span>
+                        `}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openForm(id) {
+            const item = masterData.find(m => m.id === id);
+            const currentData = progressData[id] || { progress: 0, result: '', remark: '' };
+
+            Swal.fire({
+                title: `<div class="text-xl text-left">บันทึกผลการดำเนินงาน</div><div class="text-sm text-gray-500 text-left font-normal mt-1 border-b pb-2">รหัส ${item.id} ${item.title}</div>`,
+                html: `
+                    <div class="text-left mt-4 space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ร้อยละของผลงานที่ทำได้ เทียบกับเป้าหมาย (%)</label>
+                            <input type="range" id="swal-input1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer mb-2" min="0" max="100" value="${currentData.progress}" oninput="document.getElementById('range-val').innerText = this.value + '%'">
+                            <div class="text-center font-bold text-emerald-600 text-2xl mb-2" id="range-val">${currentData.progress}%</div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ผลงานที่ทำได้ <span class="text-red-500">*</span></label>
+                            <input type="text" id="swal-input-result" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="เช่น ประหยัดได้ 25%, ประชุม 10 ครั้ง..." value="${currentData.result || ''}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ปัญหา/อุปสรรค หรือหมายเหตุ</label>
+                            <textarea id="swal-input2" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500 focus:border-emerald-500" rows="3" placeholder="ระบุรายละเอียด (ถ้ามี)...">${currentData.remark || ''}</textarea>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึกข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#10b981',
+                showLoaderOnConfirm: true,
+                preConfirm: async () => {
+                    const progress = parseInt(document.getElementById('swal-input1').value);
+                    const resultVal = document.getElementById('swal-input-result').value.trim();
+                    const remark = document.getElementById('swal-input2').value.trim();
+                    const lastUpdateBy = currentUser.name;
+
+                    if (!resultVal && progress > 0) {
+                        Swal.showValidationMessage('กรุณาระบุผลงานที่ทำได้');
+                        return false;
+                    }
+                    
+                    try {
+                        const response = await fetch(GAS_API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({
+                                action: 'saveProgress',
+                                measureId: id,
+                                progress: progress,
+                                result: resultVal,
+                                remark: remark,
+                                lastUpdateBy: lastUpdateBy
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.status !== 'success') throw new Error(result.message);
+
+                        progressData[id] = { 
+                            progress: progress,
+                            result: resultVal, 
+                            remark: remark, 
+                            lastUpdateBy: lastUpdateBy,
+                            timestamp: formatThaiDateTime(new Date().toISOString()) 
+                        };
+                        
+                        logLocalActivity('อัปเดตความก้าวหน้า', `รหัส ${id} เป็น ${progress}%`);
+                        return true;
+
+                    } catch (error) {
+                        Swal.showValidationMessage(`เกิดข้อผิดพลาดในการบันทึก: ${error}`);
+                        return false;
+                    }
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false });
+                    renderTable();
+                    updateDashboard();
+                }
+            });
+        }
+
+        // --- ส่วนจัดการ Admin ---
+        function renderAdminTable() {
+            const thead = document.getElementById('admin-table-head');
+            const tbody = document.getElementById('admin-table-body');
+            
+            let thHTML = `<th class="p-3 font-semibold min-w-[250px] sticky left-0 bg-gray-100 z-20">มาตรการ</th>`;
+            DEPARTMENTS.forEach(dept => {
+                thHTML += `<th class="p-2 text-center text-xs font-semibold whitespace-nowrap"><div style="writing-mode: vertical-rl; transform: rotate(180deg); margin: auto;">${dept.name}</div></th>`;
+            });
+            thead.innerHTML = thHTML;
+
+            tbody.innerHTML = '';
+            masterData.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.className = index % 2 === 0 ? 'bg-white hover:bg-emerald-50' : 'bg-gray-50 hover:bg-emerald-50';
+                
+                let tdHTML = `<td class="p-3 text-sm sticky left-0 bg-inherit z-10 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                    <span class="font-bold text-gray-400 mr-1">[${item.seq}]</span><span class="font-bold text-emerald-700 mr-2">${item.id}</span> ${item.title}
+                </td>`;
+
+                DEPARTMENTS.forEach(dept => {
+                    const isChecked = isAssigned(item.id, dept.id) ? 'checked' : '';
+                    tdHTML += `
+                        <td class="p-2 text-center border-l border-gray-100">
+                            <input type="checkbox" class="admin-cb w-4 h-4 text-emerald-600 bg-gray-100 border-gray-300 rounded cursor-pointer" 
+                                data-measure="${item.id}" data-dept="${dept.id}" ${isChecked}>
+                        </td>
+                    `;
+                });
+                tr.innerHTML = tdHTML;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function saveAdminSettings() {
+            const checkboxes = document.querySelectorAll('.admin-cb');
+            const newMapping = {};
+
+            checkboxes.forEach(cb => {
+                const measureId = cb.dataset.measure;
+                const deptId = cb.dataset.dept;
+                if (!newMapping[measureId]) newMapping[measureId] = [];
+                if (cb.checked) newMapping[measureId].push(deptId);
+            });
+
+            Swal.fire({ title: 'กำลังบันทึกการตั้งค่า...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+            try {
+                const response = await fetch(GAS_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'saveAssignments', assignments: newMapping, actionBy: currentUser.name })
+                });
+                
+                const result = await response.json();
+                if (result.status !== 'success') throw new Error(result.message);
+
+                measureAssignments = newMapping;
+                logLocalActivity('ตั้งค่าผู้รับผิดชอบ', 'แก้ไขตารางผู้รับผิดชอบ');
+                Swal.fire({ icon: 'success', title: 'บันทึกการตั้งค่าสำเร็จ', timer: 1500, showConfirmButton: false });
+                renderTable(); 
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: error.message });
+            }
+        }
+
+        // --- ส่วนแสดงประวัติ และจัดการผู้ใช้งาน ---
+        function showActivityLogs() {
+            let logHTML = '<div class="overflow-y-auto max-h-96 text-sm text-left"><table class="w-full text-left"><thead class="bg-gray-100 sticky top-0 shadow-sm"><tr><th class="p-3">วันเวลา</th><th class="p-3">ผู้ใช้</th><th class="p-3">กิจกรรม</th><th class="p-3">รายละเอียด</th></tr></thead><tbody class="divide-y divide-gray-100">';
+            
+            if (activityLogs.length === 0) {
+                logHTML += '<tr><td colspan="4" class="p-6 text-center text-gray-500">ยังไม่มีประวัติการใช้งาน</td></tr>';
+            } else {
+                activityLogs.forEach(log => {
+                    logHTML += `<tr class="hover:bg-gray-50">
+                        <td class="p-3 text-gray-500 whitespace-nowrap text-xs">${formatThaiDateTime(log.timestamp)}</td>
+                        <td class="p-3 font-medium text-gray-700">${log.username}</td>
+                        <td class="p-3"><span class="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">${log.action}</span></td>
+                        <td class="p-3 text-gray-600">${log.details}</td>
+                    </tr>`;
+                });
+            }
+            logHTML += '</tbody></table></div>';
+
+            Swal.fire({
+                title: '<i class="fa-solid fa-history mr-2 text-gray-500"></i>ประวัติระบบ (ล่าสุด)',
+                html: logHTML,
+                width: '800px',
+                showCloseButton: true,
+                showConfirmButton: false
+            });
+        }
+
+        function renderUsersTable() {
+            const tbody = document.getElementById('users-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            for (const [username, user] of Object.entries(dbUsers)) {
+                let roleBadge = user.role === 'admin' 
+                    ? '<span class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs font-bold">Admin</span>'
+                    : '<span class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs">Staff</span>';
+                    
+                let deptName = "-";
+                if (user.deptId) {
+                    const d = DEPARTMENTS.find(dept => dept.id === user.deptId);
+                    deptName = d ? d.name : user.deptId;
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition-colors';
+                tr.innerHTML = `
+                    <td class="p-4 font-medium text-gray-800">${username}</td>
+                    <td class="p-4 text-gray-600">${user.name}</td>
+                    <td class="p-4">${roleBadge}</td>
+                    <td class="p-4 text-gray-600">${deptName}</td>
+                    <td class="p-4 text-center">
+                        <button onclick="openEditUserForm('${username}')" class="text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 px-3 py-1.5 rounded transition-colors text-sm font-medium">
+                            <i class="fa-solid fa-edit"></i> แก้ไข
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function openAddUserForm() {
+            let deptOptions = '<option value="">ไม่มี (สำหรับ Admin / ไม่ระบุ)</option>';
+            DEPARTMENTS.forEach(d => {
+                deptOptions += `<option value="${d.id}">${d.name}</option>`;
+            });
+
+            Swal.fire({
+                title: 'เพิ่มผู้ใช้งานใหม่',
+                html: `
+                    <div class="text-left mt-4 space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Username (ห้ามซ้ำ)</label>
+                            <input type="text" id="new-username" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500 focus:border-emerald-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <input type="password" id="new-password" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500 focus:border-emerald-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-สกุล / ชื่อแสดงผล</label>
+                            <input type="text" id="new-name" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500 focus:border-emerald-500" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">สิทธิ์การใช้งาน (Role)</label>
+                            <select id="new-role" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                <option value="staff">เจ้าหน้าที่ (Staff)</option>
+                                <option value="admin">ผู้ดูแลระบบ (Admin)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">สังกัดฝ่าย (เฉพาะ Staff)</label>
+                            <select id="new-deptId" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                ${deptOptions}
+                            </select>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-plus"></i> เพิ่มผู้ใช้งาน',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#2563eb', 
+                showLoaderOnConfirm: true,
+                preConfirm: async () => {
+                    const u = document.getElementById('new-username').value.trim();
+                    const p = document.getElementById('new-password').value.trim();
+                    const n = document.getElementById('new-name').value.trim();
+                    const r = document.getElementById('new-role').value;
+                    const d = document.getElementById('new-deptId').value;
+
+                    if (!u || !p || !n) { Swal.showValidationMessage('กรุณากรอก Username, Password และ ชื่อให้ครบถ้วน'); return false; }
+                    if (dbUsers[u]) { Swal.showValidationMessage('Username นี้มีอยู่ในระบบแล้ว'); return false; }
+
+                    try {
+                        const response = await fetch(GAS_API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({ action: 'addUser', username: u, password: p, name: n, role: r, deptId: r === 'admin' ? '' : d, actionBy: currentUser.name })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.status !== 'success') throw new Error(result.message);
+
+                        dbUsers[u] = { password: p, role: r, name: n, deptId: r === 'admin' ? '' : d };
+                        logLocalActivity('เพิ่มผู้ใช้งาน', `Username: ${u}`);
+                        return true;
+                    } catch (error) {
+                        Swal.showValidationMessage(`เกิดข้อผิดพลาดในการเชื่อมต่อ: ${error.message}`);
+                        return false;
+                    }
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ icon: 'success', title: 'เพิ่มผู้ใช้งานสำเร็จ', timer: 1500, showConfirmButton: false });
+                    renderUsersTable();
+                }
+            });
+        }
+
+        function openEditUserForm(username) {
+            const user = dbUsers[username];
+            if (!user) return;
+
+            let deptOptions = '<option value="">ไม่มี (สำหรับ Admin / ไม่ระบุ)</option>';
+            DEPARTMENTS.forEach(d => {
+                const selected = user.deptId === d.id ? 'selected' : '';
+                deptOptions += `<option value="${d.id}" ${selected}>${d.name}</option>`;
+            });
+
+            const roleAdminSelected = user.role === 'admin' ? 'selected' : '';
+            const roleStaffSelected = user.role === 'staff' ? 'selected' : '';
+
+            Swal.fire({
+                title: 'แก้ไขผู้ใช้งาน',
+                html: `
+                    <div class="text-left mt-4 space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Username (แก้ไขไม่ได้)</label>
+                            <input type="text" id="edit-username" class="w-full border border-gray-300 bg-gray-100 text-gray-500 rounded-md p-2" value="${username}" readonly>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <input type="text" id="edit-password" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500" value="${user.password}" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-สกุล / ชื่อแสดงผล</label>
+                            <input type="text" id="edit-name" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500" value="${user.name}" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">สิทธิ์การใช้งาน (Role)</label>
+                            <select id="edit-role" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500">
+                                <option value="staff" ${roleStaffSelected}>เจ้าหน้าที่ (Staff)</option>
+                                <option value="admin" ${roleAdminSelected}>ผู้ดูแลระบบ (Admin)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">สังกัดฝ่าย (เฉพาะ Staff)</label>
+                            <select id="edit-deptId" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500">
+                                ${deptOptions}
+                            </select>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fa-solid fa-save"></i> บันทึกข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#10b981', 
+                showLoaderOnConfirm: true,
+                preConfirm: async () => {
+                    const p = document.getElementById('edit-password').value.trim();
+                    const n = document.getElementById('edit-name').value.trim();
+                    const r = document.getElementById('edit-role').value;
+                    const d = document.getElementById('edit-role').value === 'admin' ? '' : document.getElementById('edit-deptId').value;
+
+                    if (!p || !n) { Swal.showValidationMessage('กรุณากรอก Password และ ชื่อให้ครบถ้วน'); return false; }
+
+                    try {
+                        const response = await fetch(GAS_API_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify({ action: 'editUser', username: username, password: p, name: n, role: r, deptId: d, actionBy: currentUser.name })
+                        });
+                        
+                        const result = await response.json();
+                        if (result.status !== 'success') throw new Error(result.message);
+
+                        dbUsers[username] = { password: p, role: r, name: n, deptId: d };
+                        logLocalActivity('แก้ไขผู้ใช้งาน', `Username: ${username}`);
+                        return true;
+                    } catch (error) {
+                        Swal.showValidationMessage(`เกิดข้อผิดพลาดในการเชื่อมต่อ: ${error.message}`);
+                        return false;
+                    }
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({ icon: 'success', title: 'แก้ไขผู้ใช้งานสำเร็จ', timer: 1500, showConfirmButton: false });
+                    renderUsersTable();
+                }
+            });
+        }
+
+        function updateDashboard() {
+            let completed = 0, inProgress = 0, pending = 0;
+            let catStats = {};
+
+            let groupedMeasures = {};
+            
+            masterData.forEach(item => {
+                if (!groupedMeasures[item.seq]) {
+                    groupedMeasures[item.seq] = {
+                        category: item.category,
+                        totalProgress: 0,
+                        subCount: 0
+                    };
+                }
+                
+                const prog = progressData[item.id] ? progressData[item.id].progress : 0;
+                groupedMeasures[item.seq].totalProgress += prog;
+                groupedMeasures[item.seq].subCount++;
+            });
+
+            const uniqueSeqs = Object.keys(groupedMeasures);
+            document.getElementById('stat-total').innerText = uniqueSeqs.length;
+
+            uniqueSeqs.forEach(seq => {
+                const group = groupedMeasures[seq];
+                const avgProgress = group.totalProgress / group.subCount;
+                
+                if (avgProgress === 100) completed++;
+                else if (avgProgress > 0) inProgress++;
+                else pending++;
+
+                if(!catStats[group.category]) {
+                    catStats[group.category] = { completed: 0, incomplete: 0 };
+                }
+                
+                // นับแยกตามสถานะว่า 100% หรือยังไม่ถึง 100%
+                if (avgProgress === 100) {
+                    catStats[group.category].completed++;
+                } else {
+                    catStats[group.category].incomplete++;
+                }
+            });
+
+            document.getElementById('stat-completed').innerText = completed;
+            document.getElementById('stat-progress').innerText = inProgress;
+            document.getElementById('stat-pending').innerText = pending;
+
+            const rawLabels = Object.keys(catStats);
+            const shortLabels = rawLabels.map(lbl => {
+                if(lbl.includes('เร่งด่วน')) return 'เร่งด่วน';
+                if(lbl.includes('ประหยัดพลังงาน')) return 'ประหยัดพลังงาน';
+                if(lbl.includes('มท.')) return 'ข้อสั่งการ มท.';
+                if(lbl.includes('ผู้ว่า')) return 'ข้อสั่งการ ผู้ว่าฯ กทม.';
+                return lbl;
+            });
+
+            // ดึงข้อมูลสำหรับสร้างแท่งคู่ (Completed vs Incomplete)
+            const dataCompleted = rawLabels.map(lbl => catStats[lbl].completed);
+            const dataIncomplete = rawLabels.map(lbl => catStats[lbl].incomplete);
+
+            const ctx1 = document.getElementById('categoryChart').getContext('2d');
+            if(categoryChartInst) categoryChartInst.destroy();
+            categoryChartInst = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: shortLabels,
+                    datasets: [
+                        { 
+                            label: 'ได้ตามเป้าหมาย (100%)', 
+                            data: dataCompleted, 
+                            backgroundColor: 'rgba(16, 185, 129, 0.85)', // สีเขียว
+                            borderColor: 'rgb(16, 185, 129)', 
+                            borderWidth: 1, 
+                            borderRadius: 4 
+                        },
+                        { 
+                            label: 'ยังไม่ได้ตามเป้าหมาย (<100%)', 
+                            data: dataIncomplete, 
+                            backgroundColor: 'rgba(244, 63, 94, 0.85)', // สีแดง
+                            borderColor: 'rgb(244, 63, 94)', 
+                            borderWidth: 1, 
+                            borderRadius: 4 
+                        }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            ticks: { stepSize: 1 } // ให้สเกลนับทีละ 1 เพราะเป็นจำนวนมาตรการ (ไม่มีทศนิยม)
+                        } 
+                    }, 
+                    plugins: { 
+                        legend: { display: true, position: 'top' } // แสดง Legend ด้านบน
+                    } 
+                }
+            });
+
+            const ctx2 = document.getElementById('statusChart').getContext('2d');
+            if(statusChartInst) statusChartInst.destroy();
+            statusChartInst = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['เสร็จสิ้น', 'กำลังดำเนินงาน', 'ยังไม่เริ่ม'],
+                    datasets: [{ data: [completed, inProgress, pending], backgroundColor: ['#10b981', '#fbbf24', '#ef4444'], borderWidth: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+    </script>
+</body>
+</html>
