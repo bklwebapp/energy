@@ -588,7 +588,7 @@
                         ${prog.resultDetail ? `<div class="text-xs text-gray-600 mt-0.5 ml-3 border-l-2 border-emerald-300 pl-2 py-0.5 break-words">รายละเอียด: ${prog.resultDetail.replace(/\n/g, '<br>')}</div>` : ''}
                         ${prog.remark ? `<div class="text-xs text-blue-600 mt-0.5"><i class="fa-solid fa-comment-dots"></i> หมายเหตุ: ${prog.remark}</div>` : ''}
                         ${prog.timestamp ? `<div class="text-[11px] text-gray-400 mt-0.5"><i class="fa-regular fa-clock"></i> ${formatThaiDateTime(prog.timestamp)}</div>` : ''}
-                        ${prog.imageUrl && prog.imageUrl.toString().startsWith('http') ? `<div class="text-[11px] mt-1"><a href="${getDirectImageUrl(prog.imageUrl)}" target="_blank" class="text-blue-500 hover:text-blue-700 underline"><i class="fa-solid fa-image"></i> รูปภาพแนบ (คลิกเพื่อดู)</a></div>` : ''}
+                        ${prog.imageUrl && prog.imageUrl.toString().startsWith('http') ? `<div class="text-[11px] mt-1"><a href="${getDirectImageUrl(prog.imageUrl)}" target="_blank" class="text-blue-500 hover:text-blue-700 underline"><i class="fa-solid fa-paperclip"></i> ไฟล์แนบ (คลิกเพื่อดู)</a></div>` : ''}
                     </td>
                     <td class="p-4 text-center">${gaugeHTML}</td>
                     <td class="p-4 whitespace-normal max-w-[150px] leading-tight">
@@ -636,7 +636,7 @@
                             ${h.result ? `<div class="text-sm text-gray-700 mb-1"><span class="font-semibold">ผลงาน:</span> ${h.result}</div>` : ''}
                             ${h.resultDetail ? `<div class="text-sm text-gray-600 mb-1 border-l-2 border-gray-300 pl-2 break-words"><span class="font-semibold">รายละเอียด:</span> ${h.resultDetail.replace(/\n/g, '<br>')}</div>` : ''}
                             ${h.remark ? `<div class="text-sm text-gray-700 mb-2"><span class="font-semibold">หมายเหตุ:</span> ${h.remark}</div>` : ''}
-                            ${h.imageUrl && h.imageUrl.toString().startsWith('http') ? `<a href="${getDirectImageUrl(h.imageUrl)}" target="_blank"><img src="${getThumbnailUrl(h.imageUrl)}" class="mt-2 w-full max-w-[200px] h-auto rounded border border-gray-200 hover:opacity-90 transition-opacity" alt="รูปภาพแนบ"></a>` : ''}
+                            ${h.imageUrl && h.imageUrl.toString().startsWith('http') ? `<a href="${getDirectImageUrl(h.imageUrl)}" target="_blank" title="เปิดดูไฟล์แนบ"><img src="${getThumbnailUrl(h.imageUrl)}" class="mt-2 w-full max-w-[200px] h-auto rounded border border-gray-200 hover:opacity-90 transition-opacity" alt="ไฟล์แนบ"></a>` : ''}
                         </div>
                     </div>
                     `;
@@ -679,9 +679,9 @@
                             <input type="text" id="swal-input2" class="w-full border border-gray-300 rounded-md p-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="ระบุปัญหาอุปสรรค (ถ้ามี)..." value="${currentData.remark || ''}">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1"><i class="fa-solid fa-camera"></i> แนบรูปภาพประกอบ (ถ้ามี)</label>
-                            <input type="file" id="swal-input-image" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
-                            ${currentData.imageUrl && currentData.imageUrl.toString().startsWith('http') ? `<div class="text-xs text-gray-400 mt-1">*มีรูปภาพแนบไว้แล้ว หากไม่เลือกไฟล์ใหม่ จะใช้รูปเดิม</div>` : ''}
+                            <label class="block text-sm font-medium text-gray-700 mb-1"><i class="fa-solid fa-paperclip"></i> แนบไฟล์ (รูปภาพ, PDF, เอกสาร *งดวิดีโอ)</label>
+                            <input type="file" id="swal-input-image" accept="image/*, .pdf, .doc, .docx, .xls, .xlsx" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+                            ${currentData.imageUrl && currentData.imageUrl.toString().startsWith('http') ? `<div class="text-xs text-gray-400 mt-1">*มีไฟล์แนบไว้แล้ว หากไม่เลือกใหม่ จะใช้ไฟล์เดิม</div>` : ''}
                         </div>
                     </div>
                 `,
@@ -705,8 +705,27 @@
                     
                     let base64String = "";
                     if (fileInput.files.length > 0) {
+                        const file = fileInput.files[0];
+                        
+                        // บล็อกไม่ให้อัปโหลดวิดีโอ
+                        if (file.type.startsWith('video/')) {
+                            Swal.showValidationMessage('ระบบไม่อนุญาตให้แนบไฟล์วิดีโอ');
+                            return false;
+                        }
+                        
                         Swal.getHtmlContainer().style.opacity = '0.5'; 
-                        base64String = await resizeImage(fileInput.files[0], 800); 
+                        
+                        // ถ้ารูปภาพ ให้ย่อขนาด ถ่าเป็นไฟล์อื่น (เช่น PDF, Word) ให้อ่านเป็น Base64 เลย
+                        if (file.type.startsWith('image/')) {
+                            base64String = await resizeImage(file, 800); 
+                        } else {
+                            base64String = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onload = () => resolve(reader.result);
+                                reader.onerror = error => reject(error);
+                                reader.readAsDataURL(file);
+                            });
+                        }
                     }
                     
                     try {
@@ -718,7 +737,7 @@
                                 measureId: id,
                                 progress: progress,
                                 result: resultVal,
-                                resultDetail: resultDetailVal, // ส่งค่าใหม่ไป Backend
+                                resultDetail: resultDetailVal,
                                 remark: remark,
                                 imageBase64: base64String,
                                 existingImageUrl: currentData.imageUrl,
@@ -738,7 +757,7 @@
                         if (result.imgError) {
                             Swal.fire({
                                 icon: 'warning',
-                                title: 'บันทึกข้อความสำเร็จ แต่รูปไม่ขึ้น',
+                                title: 'บันทึกข้อความสำเร็จ แต่ไฟล์ไม่ขึ้น',
                                 text: 'พบปัญหา: ' + result.imgError + '\n\nคำแนะนำ: ให้ไปที่หน้า Apps Script เลือกฟังก์ชัน forceAuthorize แล้วกดปุ่ม "เรียกใช้" (Run) เพื่อยืนยันสิทธิ์อีกครั้ง',
                                 confirmButtonText: 'รับทราบ'
                             });
@@ -749,7 +768,7 @@
                         progressData[id] = { 
                             progress: progress,
                             result: resultVal, 
-                            resultDetail: resultDetailVal, // อัปเดตในระบบฝั่งหน้าเว็บ
+                            resultDetail: resultDetailVal,
                             remark: remark, 
                             lastUpdateBy: lastUpdateBy,
                             timestamp: formatThaiDateTime(new Date().toISOString()),
@@ -760,7 +779,7 @@
                         reportHistory[id].push({
                             progress: progress, 
                             result: resultVal, 
-                            resultDetail: resultDetailVal, // อัปเดตลงประวัติ Timeline
+                            resultDetail: resultDetailVal,
                             remark: remark, 
                             updateBy: lastUpdateBy, 
                             timestamp: new Date().toISOString(), 
